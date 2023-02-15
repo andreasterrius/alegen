@@ -85,11 +85,11 @@ unsigned int createShader(string &vertexShaderSource, string &fragmentShaderSour
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
     success = 0;
-    glGetShaderiv(shaderProgram, GL_LINK_STATUS, &success);
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
     if(!success){
         char infoLog[1024];
         glGetShaderInfoLog(shaderProgram, 1024, NULL, infoLog);
-        cout << "vertex compile error:\n" << infoLog << "\n";
+        cout << "shader link error:\n" << infoLog << "\n";
     }
 
     glDeleteShader(vertexShader);
@@ -111,11 +111,16 @@ string readFile(string fileName) {
 
 static bool setupOpenGL()
 {
-	if (!gladLoadGL())
-	{
-		printf("Could not initialize OpenGL!\n");
-		return false;
-	}
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    {
+        std::cout << "Failed to initialize GLAD" << std::endl;
+        return false;
+    }
+	// if (!gladLoadGL())
+	// {
+	// 	printf("Could not initialize OpenGL!\n");
+	// 	return false;
+	// }
 	printf("OpenGL %d.%d\n", GLVersion.major, GLVersion.minor);
 
 #define C(x) (x ? (const char*)x : "")
@@ -127,10 +132,10 @@ static bool setupOpenGL()
 
 	//setupStderrDebugCallback();
 
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
-	glDepthFunc(GL_LEQUAL);
-	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+	// glEnable(GL_DEPTH_TEST);
+	// glEnable(GL_BLEND);
+	// glDepthFunc(GL_LEQUAL);
+	// glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
 	return true;
 }
@@ -146,7 +151,9 @@ GLFWwindow* createWindow() {
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+#ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 
@@ -178,9 +185,10 @@ public:
 
     SpriteRenderer() {
         float vertices[] = {
-            -1.0f, -1.0f, 0.0f, // left  
-            1.0f, -1.0f, 0.0f, // right 
-            -1.0f,  1.0f, 0.0f  // top left   
+            -1.0f, -1.0f, // bot left  
+            1.0f, -1.0f,  // bot right 
+            -1.0f,  1.0f,// top left   
+            1.0f,  1.0f,  // top right   
         }; 
 
         unsigned int VAO;  
@@ -192,7 +200,9 @@ public:
         glBindBuffer(GL_ARRAY_BUFFER, VBO);
         glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
         
@@ -207,19 +217,33 @@ public:
     void render(vector<Sprite> sprites) {
         glUseProgram(spriteShader);
         glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        // int viewLoc = glGetUniformLocation(spriteShader, "view");
+        // int projLoc = glGetUniformLocation(spriteShader, "projection");
+        for(auto &sprite : sprites){
+            glm::mat4 model = glm::mat4(1.0f); 
+            int modelLoc = glGetUniformLocation(spriteShader, "model");
+            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
+
+            int colorLoc = glGetUniformLocation(spriteShader, "color");
+            glUniform4fv(colorLoc, 1, &sprite.color[0]);
+        }
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     }
 };
 
 int main(){
     GLFWwindow* window = createWindow();
+    if(window == nullptr) return -1;
     SpriteRenderer spriteRenderer;
 
     while(!glfwWindowShouldClose(window)) {
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         
-        spriteRenderer.render(vector<Sprite>{});
+        spriteRenderer.render(vector<Sprite>{
+            Sprite{vec3(0.0f), vec4(1.0f, 0.0f, 0.0f, 0.0f)}
+        });
 
         glfwSwapBuffers(window);
         glfwPollEvents();
