@@ -1,0 +1,13 @@
+[requires]
+glfw/[>=3.3]
+glad/[>=0.1.29]
+glm/[>=0.9.9]
+
+[options]
+glad:gl_profile=core
+glad:gl_version=3.3
+glad:spec=gl
+glad:no_loader=False
+
+[generators]
+cmake
