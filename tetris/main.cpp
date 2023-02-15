@@ -8,12 +8,36 @@
 #include <sstream>
 #include <vector>
 #include <tuple>
+#include <filesystem>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 using namespace std;
 using namespace glm;
 
 const int windowWidth = 400;
 const int windowHeight = 400;
+
+std::filesystem::path getExeParentDirectory()
+{
+#ifdef _WIN32
+    // Windows specific
+    wchar_t szPath[MAX_PATH];
+    GetModuleFileNameW( NULL, szPath, MAX_PATH );
+#else
+    // Linux specific
+    char szPath[PATH_MAX];
+    ssize_t count = readlink( "/proc/self/exe", szPath, PATH_MAX );
+    if( count < 0 || count >= PATH_MAX )
+        return {}; // some error
+    szPath[count] = '\0';
+#endif
+    return std::filesystem::path{ szPath }.parent_path().parent_path() / ""; // to finish the folder path with (back)slash
+}
 
 static void printGLFWInfo(GLFWwindow* window)
 {
@@ -112,11 +136,14 @@ static bool setupOpenGL()
 }
 
 GLFWwindow* createWindow() {
+    filesystem::current_path(getExeParentDirectory());
+
     glfwSetErrorCallback([](int error, const char* description) {
         fprintf(stderr, "GLFW Error %d: %s\n", error, description);
     });
     if (!glfwInit())
         return nullptr;
+
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -169,8 +196,8 @@ public:
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
         
-        string vertexShaderSource = readFile("sprite.vert");
-        string fragmentShaderSource = readFile("sprite.frag");
+        string vertexShaderSource = readFile("resources/shader/sprite.vert");
+        string fragmentShaderSource = readFile("resources/shader/sprite.frag");
 
         this->spriteShader = createShader(vertexShaderSource, fragmentShaderSource);
         this->VAO = VAO;

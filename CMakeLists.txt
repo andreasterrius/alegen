@@ -13,24 +13,17 @@ if (NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
                  "${CMAKE_BINARY_DIR}/conan.cmake")
 endif()
 
-FOREACH(subdir ${SUBDIRS})
-  ADD_SUBDIRECTORY(${subdir})
-ENDFOREACH()
-
 include(${CMAKE_BINARY_DIR}/conan.cmake)
 
 conan_cmake_run(CONANFILE conanfile.txt
                 BASIC_SETUP CMAKE_TARGETS
                 BUILD missing)
 
-set(SUBDIRS 
-      tetris)
-FOREACH(subdir ${SUBDIRS})
-   add_subdirectory(${subdir})
+add_custom_target(copy_resources
+   COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/resources
+   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/resources ${CMAKE_BINARY_DIR}/resources
+   COMMENT "copying ${CMAKE_SOURCE_DIR}/resources to ${CMAKE_BINARY_DIR}/resources"
+)
 
-#    add_custom_command(
-#       TARGET ${subdir} POST_BUILD
-#       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR} $<TARGET_FILE_DIR:${SUBDIR}>
-#       COMMENT "Copying shaders ${CMAKE_SOURCE_DIR} to $<TARGET_FILE_DIR:${SUBDIR}>" 
-#   )
-ENDFOREACH()
+add_subdirectory(tetris)
+
