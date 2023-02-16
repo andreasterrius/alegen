@@ -10,6 +10,10 @@
 #include <vector>
 #include <tuple>
 #include <filesystem>
+#include <time.h>
+#include <stdlib.h>
+
+#include "tetris.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -181,6 +185,7 @@ GLFWwindow *createWindow()
 struct Sprite
 {
     vec3 position;
+    vec2 size;
     vec3 color;
 };
 
@@ -236,37 +241,50 @@ public:
         for (auto &sprite : sprites)
         {
             glm::mat4 model = glm::mat4(1.0f);
-            model = scale(model, glm::vec3(200.0f, 200.0f, 1.0f));
+            model = translate(model, sprite.position);
+            model = scale(model, glm::vec3(sprite.size.x, sprite.size.y, 1.0f));
 
             int modelLoc = glGetUniformLocation(spriteShader, "model");
             glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
 
             int colorLoc = glGetUniformLocation(spriteShader, "color");
             glUniform4fv(colorLoc, 1, &sprite.color[0]);
+
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         }
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     }
 };
 
 int main()
 {
+    srand(time(NULL));
+
     GLFWwindow *window = createWindow();
     if (window == nullptr)
         return -1;
     SpriteRenderer spriteRenderer;
+    Arena arena;
 
     mat4 ortho = glm::ortho(0.0f, (float)windowWidth, 0.0f, (float)windowHeight, 0.1f, 100.0f);
     mat4 view = mat4(1.0);
-    view  = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
+    view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
 
+    auto sprites = vector<Sprite>{
+        Sprite{vec3(0.0f), vec2(200.0f), vec4(1.0f, 0.0f, 0.0f, 0.0f)},
+        Sprite{vec3(1.0f), vec2(100.0f), vec4(0.0f, 1.0f, 0.0f, 0.0f)}
+    };
+
+    float lastTime = glfwGetTime();
     while (!glfwWindowShouldClose(window))
     {
+        float currTime = glfwGetTime();
+        float deltaTime = currTime - lastTime;
+        lastTime = currTime;
+
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        spriteRenderer.render(vector<Sprite>{
-                                  Sprite{vec3(0.0f), vec4(1.0f, 0.0f, 0.0f, 0.0f)}},
-                              view, ortho);
+        spriteRenderer.render(sprites, view, ortho);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
