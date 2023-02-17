@@ -13,6 +13,7 @@
 #include <time.h>
 #include <stdlib.h>
 
+#include "sprite_renderer.h"
 #include "tetris.h"
 
 #ifdef _WIN32
@@ -24,8 +25,8 @@
 using namespace std;
 using namespace glm;
 
-const int windowWidth = 400;
-const int windowHeight = 400;
+const int windowWidth = 800;
+const int windowHeight = 800;
 
 std::filesystem::path getExeParentDirectory()
 {
@@ -54,72 +55,6 @@ static void printGLFWInfo(GLFWwindow *window)
         profileStr = "OpenGL Core Profile";
 
     printf("GLFW %s %s\n", glfwGetVersionString(), profileStr);
-}
-
-unsigned int createShader(string &vertexShaderSource, string &fragmentShaderSource)
-{
-    unsigned int vertexShader;
-    vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    const char *vss = vertexShaderSource.c_str();
-    glShaderSource(vertexShader, 1, &vss, NULL);
-    glCompileShader(vertexShader);
-
-    int success = 0;
-    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
-        char infoLog[1024];
-        glGetShaderInfoLog(vertexShader, 1024, NULL, infoLog);
-        cout << "vertex compile error:\n"
-             << infoLog << "\n";
-    }
-
-    unsigned int fragmentShader;
-    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    const char *fss = fragmentShaderSource.c_str();
-    glShaderSource(fragmentShader, 1, &fss, NULL);
-    glCompileShader(fragmentShader);
-    success = 0;
-    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
-        char infoLog[1024];
-        glGetShaderInfoLog(fragmentShader, 1024, NULL, infoLog);
-        cout << "fragment compile error:\n"
-             << infoLog << "\n";
-    }
-
-    unsigned int shaderProgram;
-    shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-    success = 0;
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-    if (!success)
-    {
-        char infoLog[1024];
-        glGetShaderInfoLog(shaderProgram, 1024, NULL, infoLog);
-        cout << "shader link error:\n"
-             << infoLog << "\n";
-    }
-
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-
-    return shaderProgram;
-}
-
-string readFile(string fileName)
-{
-    ifstream inFile;
-    inFile.open(fileName); // open the input file
-
-    stringstream strStream;
-    strStream << inFile.rdbuf();  // read the file
-    string str = strStream.str(); // str holds the content of the file
-
-    return str;
 }
 
 static bool setupOpenGL()
@@ -166,8 +101,6 @@ GLFWwindow *createWindow()
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 
-    int windowWidth = 300;
-    int windowHeight = 300;
     GLFWwindow *window = glfwCreateWindow((int)windowWidth, (int)windowHeight, "Main Window", nullptr, nullptr);
     if (!window)
     {
@@ -182,79 +115,6 @@ GLFWwindow *createWindow()
     return window;
 }
 
-struct Sprite
-{
-    vec3 position;
-    vec2 size;
-    vec3 color;
-};
-
-class SpriteRenderer
-{
-public:
-    int VAO, VBO;
-    int spriteShader;
-
-    SpriteRenderer()
-    {
-        float vertices[] = {
-            -1.0f, -1.0f, // bot left
-            1.0f, -1.0f,  // bot right
-            -1.0f, 1.0f,  // top left
-            1.0f, 1.0f,   // top right
-        };
-
-        unsigned int VAO;
-        glGenVertexArrays(1, &VAO);
-        glBindVertexArray(VAO);
-
-        unsigned int VBO;
-        glGenBuffers(1, &VBO);
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
-        glEnableVertexAttribArray(0);
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
-
-        string vertexShaderSource = readFile("resources/shader/sprite.vert");
-        string fragmentShaderSource = readFile("resources/shader/sprite.frag");
-
-        this->spriteShader = createShader(vertexShaderSource, fragmentShaderSource);
-        this->VAO = VAO;
-        this->VBO = VBO;
-    }
-
-    void render(vector<Sprite> sprites, mat4 view, mat4 proj)
-    {
-        glUseProgram(spriteShader);
-        glBindVertexArray(VAO);
-
-        int viewLoc = glGetUniformLocation(spriteShader, "view");
-        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, &view[0][0]);
-
-        int projLoc = glGetUniformLocation(spriteShader, "projection");
-        glUniformMatrix4fv(projLoc, 1, GL_FALSE, &proj[0][0]);
-
-        for (auto &sprite : sprites)
-        {
-            glm::mat4 model = glm::mat4(1.0f);
-            model = translate(model, sprite.position);
-            model = scale(model, glm::vec3(sprite.size.x, sprite.size.y, 1.0f));
-
-            int modelLoc = glGetUniformLocation(spriteShader, "model");
-            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
-
-            int colorLoc = glGetUniformLocation(spriteShader, "color");
-            glUniform4fv(colorLoc, 1, &sprite.color[0]);
-
-            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-        }
-    }
-};
-
 int main()
 {
     srand(time(NULL));
@@ -264,16 +124,20 @@ int main()
         return -1;
     SpriteRenderer spriteRenderer;
     Arena arena;
+    arena.size = vec2(500, 400);
+    arena.moveDown(); //force to spawn
 
-    mat4 ortho = glm::ortho(0.0f, (float)windowWidth, 0.0f, (float)windowHeight, 0.1f, 100.0f);
+    mat4 ortho = glm::ortho(0.0f, (float)windowWidth, (float)windowHeight, 0.0f, 0.1f, 100.0f);
     mat4 view = mat4(1.0);
     view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
 
     auto sprites = vector<Sprite>{
-        Sprite{vec3(0.0f), vec2(200.0f), vec4(1.0f, 0.0f, 0.0f, 0.0f)},
-        Sprite{vec3(1.0f), vec2(100.0f), vec4(0.0f, 1.0f, 0.0f, 0.0f)}
+        Sprite{vec3(vec2(0.0f), 0.0f), vec2(50.0f), vec4(1.0f, 0.0f, 0.0f, 0.0f)},
+        Sprite{vec3(vec2(100.0f), 0.0f), vec2(100.0f), vec4(0.0f, 1.0f, 0.0f, 0.0f)},
     };
 
+    float moveDownThershold = 1.0f; // 1 second then tick down
+    float moveDownTime = 0.0f;
     float lastTime = glfwGetTime();
     while (!glfwWindowShouldClose(window))
     {
@@ -285,6 +149,14 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT);
 
         spriteRenderer.render(sprites, view, ortho);
+        auto previewSprites = arena.renderPreview();
+        spriteRenderer.render(previewSprites, view, ortho);
+
+        moveDownTime += deltaTime;
+        if(moveDownTime >= moveDownThershold) {
+            moveDownTime = 0;
+            arena.moveDown(); 
+        }
 
         glfwSwapBuffers(window);
         glfwPollEvents();
