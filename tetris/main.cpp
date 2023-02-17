@@ -115,6 +115,42 @@ GLFWwindow *createWindow()
     return window;
 }
 
+class Input
+{
+public:
+    bool shouldMoveLeft;
+    bool shouldMoveRight;
+    bool shouldMoveFaster;
+
+    void handleEvent(GLFWwindow *window)
+    {
+        if(glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS){
+            shouldMoveLeft = true;
+            //cout << "left press\n";
+        }
+        if(glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_RELEASE){
+            shouldMoveLeft = false;
+            //cout << "left release\n";
+        }
+        if(glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS){
+            shouldMoveRight = true;
+            //cout << "right press\n";
+        }
+        if(glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_RELEASE){
+            shouldMoveRight = false;
+            //cout << "right release\n";
+        }
+        if(glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS){
+            shouldMoveFaster = true;
+            //cout << "down press\n";
+        }
+        if(glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_RELEASE){
+            shouldMoveFaster = false;
+           // cout << "down release\n";
+        }
+    }
+};
+
 int main()
 {
     srand(time(NULL));
@@ -124,7 +160,9 @@ int main()
         return -1;
     SpriteRenderer spriteRenderer;
     Arena arena(vec2(100, 0), 300);
-    arena.moveDown(); //force to spawn
+    arena.moveDown(); // force to spawn
+
+    Input input;
 
     mat4 ortho = glm::ortho(0.0f, (float)windowWidth, (float)windowHeight, 0.0f, 0.1f, 100.0f);
     mat4 view = mat4(1.0);
@@ -135,7 +173,12 @@ int main()
         Sprite{vec3(vec2(100.0f), 0.0f), vec2(100.0f), vec4(0.0f, 1.0f, 0.0f, 0.0f)},
     };
 
-    float moveDownThershold = 1.0f; // 1 second then tick down
+    float inputThershold = 0.1f;
+    float inputTime = 0.0f;
+
+    float moveDownMin = 0.04f;
+    float moveDownMax = 0.5f;
+    float moveDownThershold = moveDownMax; // 1 second then tick down
     float moveDownTime = 0.0f;
     float lastTime = glfwGetTime();
     while (!glfwWindowShouldClose(window))
@@ -147,6 +190,13 @@ int main()
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        input.handleEvent(window);
+        if (input.shouldMoveFaster)
+            moveDownThershold = moveDownMin;
+        else
+            moveDownThershold = moveDownMax;
+        cout << moveDownThershold << endl;
+
         spriteRenderer.render(sprites, view, ortho);
         auto previewSprites = arena.renderPreview();
         spriteRenderer.render(previewSprites, view, ortho);
@@ -156,9 +206,16 @@ int main()
         spriteRenderer.render(arenaBoundarySprites, view, ortho);
 
         moveDownTime += deltaTime;
-        if(moveDownTime >= moveDownThershold) {
+        if (moveDownTime >= moveDownThershold)
+        {
             moveDownTime = 0;
-            arena.moveDown(); 
+            arena.moveDown();
+        }
+
+        inputTime += deltaTime;
+        if(inputTime >= inputThershold) {
+            inputTime = 0;
+            arena.moveHorizontal(input.shouldMoveLeft, input.shouldMoveRight);
         }
 
         glfwSwapBuffers(window);

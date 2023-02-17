@@ -5,6 +5,7 @@
 #include <deque>
 #include <limits>
 #include <memory>
+#include <unordered_set>
 
 #include <time.h>
 #include <stdlib.h>
@@ -22,17 +23,44 @@ using namespace glm;
 //[TYPE][ROTATION][I][J]
 static const vector<vector<vector<vector<int>>>> templates{
 #define TYPE_Z 0
-    {
-        {
-            {1, 1, 0},
-            {0, 1, 1},
-        },
-        {
-            {0, 1},
-            {1, 1},
-            {1, 0},
-        },
-    }};
+    {{
+         {0, 0, 0, 0},
+         {0, 1, 1, 0},
+         {0, 0, 1, 1},
+         {0, 0, 0, 0},
+     },
+     {
+         {0, 0, 0, 0},
+         {0, 0, 1, 0},
+         {0, 1, 1, 0},
+         {0, 1, 0, 0},
+     }},
+#define TYPE_Z_ALT 1
+    {{
+         {0, 0, 0, 0},
+         {0, 0, 1, 1},
+         {0, 1, 1, 0},
+         {0, 0, 0, 0},
+     },
+     {
+         {0, 0, 0, 0},
+         {0, 1, 0, 0},
+         {0, 1, 1, 0},
+         {0, 0, 1, 0},
+     }},
+#define TYPE_I_ALT 1
+    {{
+         {0, 0, 1, 0},
+         {0, 0, 1, 0},
+         {0, 0, 1, 0},
+         {0, 0, 1, 0},
+     },
+     {
+         {0, 0, 0, 0},
+         {0, 0, 0, 0},
+         {1, 1, 1, 1},
+         {0, 0, 0, 0},
+     }}};
 
 class Block
 {
@@ -47,9 +75,9 @@ public:
         b.type = rand() % templates.size();
         b.rotation = rand() % templates[b.type].size();
         b.color = vec3(
-            ((float) (rand() % 256) / 255), 
-            ((float) (rand() % 256) / 255), 
-            ((float) (rand() % 256) / 255));
+            ((float)(rand() % 256) / 255),
+            ((float)(rand() % 256) / 255),
+            ((float)(rand() % 256) / 255));
         return b;
     }
 
@@ -65,9 +93,9 @@ public:
                 {
                     vec2 pos = vec2(j, i) * blockSize;
                     sprites.push_back(
-                        {vec3(pos, 0.0), 
-                        blockSize, 
-                        vec4(color, 0.0)});
+                        {vec3(pos, 0.0),
+                         blockSize,
+                         vec4(color, 0.0)});
                 }
             }
         }
@@ -78,6 +106,7 @@ public:
 struct ArenaBlock
 {
 public:
+    bool isPlaced;
     bool isFilled;
     vec3 color;
 };
@@ -105,10 +134,13 @@ public:
         resetArena();
     }
 
-    void resetArena(){
-        for(int i = 0; i < ARENA_SIZE_Y; ++i){
-            for(int j = 0; j < ARENA_SIZE_X; ++j){
-                blocks[i][j] = ArenaBlock{false, vec3()};
+    void resetArena()
+    {
+        for (int i = 0; i < ARENA_SIZE_Y; ++i)
+        {
+            for (int j = 0; j < ARENA_SIZE_X; ++j)
+            {
+                blocks[i][j] = ArenaBlock{false, false, vec3()};
             }
         }
     }
@@ -136,7 +168,8 @@ public:
         return vec2(kx, kx);
     }
 
-    vector<ivec2> getSelectedIndex(){
+    vector<ivec2> getSelectedIndex()
+    {
         vector<ivec2> indices;
         if (selected != nullptr)
         {
@@ -145,7 +178,8 @@ public:
             {
                 for (int j = 0; j < block[i].size(); ++j)
                 {
-                    if(block[i][j] == 0) continue;
+                    if (block[i][j] == 0)
+                        continue;
                     int x = selectedIndex.x + j;
                     int y = selectedIndex.y + i;
                     indices.push_back(ivec2(x, y));
@@ -155,34 +189,124 @@ public:
         return indices;
     }
 
+    void moveHorizontal(bool isLeft, bool isRight)
+    {
+        if (isLeft == isRight)
+        {
+            return;
+        }
+        auto si = getSelectedIndex();
+
+        if (isLeft)
+        {
+            bool canMoveLeft = true;
+            for (auto &s : si)
+            {
+                if (s.x - 1 < 0 || blocks[s.y][s.x - 1].isPlaced)
+                {
+                    canMoveLeft = false;
+                }
+            }
+            if (canMoveLeft)
+            {
+                clearCurrentBlock();
+                selectedIndex.x -= 1;
+                placeCurrentBlock();
+            }
+        }
+        if (isRight)
+        {
+            bool canMoveRight = true;
+            for (auto &s : si)
+            {
+                if (s.x + 1 >= ARENA_SIZE_X || blocks[s.y][s.x + 1].isPlaced)
+                {
+                    canMoveRight = false;
+                }
+            }
+            if (canMoveRight)
+            {
+                clearCurrentBlock();
+                selectedIndex.x += 1;
+                placeCurrentBlock();
+            }
+        }
+    }
+
     void moveDown()
     {
-        // if prev block is placed, then we get a new one
         if (selected == nullptr)
         {
             selectNext();
         }
 
+        bool shouldPlace = false;
         auto si = getSelectedIndex();
-        for(auto &s: si){
-            blocks[s.y][s.x] = ArenaBlock{false, vec3()};
-        }
-        selectedIndex.y += 1;
-        si = getSelectedIndex();
-        for(auto &s: si){
-            vec3 color;
-            if(selected != nullptr){
-                color = selected->color;
+        for (auto &s : si)
+        {
+            if (s.y + 1 >= ARENA_SIZE_Y || blocks[s.y + 1][s.x].isPlaced)
+            {
+                shouldPlace = true;
+                break;
             }
-            blocks[s.y][s.x] = ArenaBlock{true, color};
         }
-        cout << selectedIndex.y << endl;
+        if (shouldPlace)
+        {
+            unordered_set<int> checkY;
+            bool isDead = false;
+            for (auto &s : si)
+            {
+                blocks[s.y][s.x] = ArenaBlock{true, true, selected->color};
+                checkY.insert(s.y);
+                if (s.y < ARENA_HIDDEN_HEIGHT)
+                {
+                    dead();
+                    return;
+                }
+            }
+            scoreCheck(checkY);
+            selected = nullptr;
+            return;
+        }
+        else
+        {
+            // move everything down once
+            clearCurrentBlock();
+            selectedIndex.y += 1;
+            placeCurrentBlock();
+        }
+    }
+
+    void clearCurrentBlock()
+    {
+        auto si = getSelectedIndex();
+        for (auto &s : si)
+        {
+            blocks[s.y][s.x] = ArenaBlock{false, false, selected->color};
+        }
+    }
+
+    void placeCurrentBlock()
+    {
+        auto si = getSelectedIndex();
+        for (auto &s : si)
+        {
+            blocks[s.y][s.x] = ArenaBlock{false, true, selected->color};
+        }
+    }
+
+    void dead()
+    {
+    }
+
+    void scoreCheck(unordered_set<int> &checkY)
+    {
     }
 
     vector<Sprite> renderPreview()
     {
         vec2 blockSize = getBlockSize();
-        vec2 startPos = vec2(position.x + size.x, position.y);
+        vec2 startPos = vec2(position.x + size.x, position.y + blockSize.y);
 
         vector<Sprite> sprites;
         for (int i = 0; i < next.size(); ++i)
@@ -193,7 +317,7 @@ public:
             for (int j = 0; j < n.size(); ++j)
             {
                 n[j].position += vec3(
-                    startPos.x + blockSize.x * 2.0, 
+                    startPos.x + blockSize.x * 2.0,
                     startPos.y,
                     0.0);
                 sprites.push_back(n[j]);
@@ -209,14 +333,15 @@ public:
     vector<Sprite> render()
     {
         vec2 blockSize = getBlockSize();
-        vec2 startPos = vec2(position.x, position.y - ARENA_HIDDEN_HEIGHT*blockSize.y);
+        vec2 startPos = vec2(position.x, position.y - ARENA_HIDDEN_HEIGHT * blockSize.y);
 
         vector<Sprite> sprites;
         for (int i = 0; i < ARENA_SIZE_Y; ++i)
         {
             for (int j = 0; j < ARENA_SIZE_X; ++j)
             {
-                if(!blocks[i][j].isFilled){
+                if (!blocks[i][j].isFilled)
+                {
                     continue;
                 }
                 sprites.push_back(Sprite{
@@ -229,12 +354,13 @@ public:
         return sprites;
     }
 
-    vector<Sprite> renderBoundary() {
-        //render the boundarys of the tetris arena
+    vector<Sprite> renderBoundary()
+    {
+        // render the boundarys of the tetris arena
         vec2 blockSize = getBlockSize();
-        vec2 halfBlockSize = blockSize/vec2(4.0);
+        vec2 halfBlockSize = blockSize / vec2(4.0);
 
-        //top left
+        // top left
         vec2 topLeft = vec2(position.x - halfBlockSize.x, position.y);
         vec2 bottomLeft = vec2(topLeft.x, size.y - ARENA_HIDDEN_HEIGHT * blockSize.y);
         vec2 topRight = vec2(position.x + size.x, position.y);
