@@ -123,8 +123,7 @@ int main()
     if (window == nullptr)
         return -1;
     SpriteRenderer spriteRenderer;
-    Arena arena;
-    arena.size = vec2(500, 400);
+    Arena arena(vec2(100, 0), 300);
     arena.moveDown(); //force to spawn
 
     mat4 ortho = glm::ortho(0.0f, (float)windowWidth, (float)windowHeight, 0.0f, 0.1f, 100.0f);
@@ -151,6 +150,10 @@ int main()
         spriteRenderer.render(sprites, view, ortho);
         auto previewSprites = arena.renderPreview();
         spriteRenderer.render(previewSprites, view, ortho);
+        auto arenaSprites = arena.render();
+        spriteRenderer.render(arenaSprites, view, ortho);
+        auto arenaBoundarySprites = arena.renderBoundary();
+        spriteRenderer.render(arenaBoundarySprites, view, ortho);
 
         moveDownTime += deltaTime;
         if(moveDownTime >= moveDownThershold) {
