@@ -2,6 +2,7 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <enet/enet.h>
 
 #include <string>
 #include <iostream>
@@ -123,6 +124,10 @@ class Input
 public:
     Input() : moveLeftTimer(moveTickTime, moveTickFirstSticky), moveRightTimer(moveTickTime, moveTickFirstSticky)
     {
+        moveDownMin = 0.04f;
+        moveDownMax = 0.5f;
+        moveDownThershold = moveDownMax; // 1 second then tick down
+        moveDownTime = 0.0f;
     }
 
     Timer moveLeftTimer;
@@ -130,10 +135,30 @@ public:
     Arena *arena;
     bool shouldMoveFaster;
 
+    float moveDownMin;
+    float moveDownMax;
+    float moveDownThershold;
+    float moveDownTime;
+
     void timerTicks(float deltaTime)
     {
         moveLeftTimer.tick(deltaTime);
         moveRightTimer.tick(deltaTime);
+    }
+
+    void handleMoveDown(float deltaTime)
+    {
+        if (shouldMoveFaster)
+            moveDownThershold = moveDownMin;
+        else
+            moveDownThershold = moveDownMax;
+        moveDownTime += deltaTime;
+
+        if (moveDownTime >= moveDownThershold)
+        {
+            moveDownTime = 0;
+            arena->moveDown();
+        }
     }
 };
 
@@ -184,59 +209,34 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
     }
 }
 
-int main()
+class Tetris
 {
-    srand(time(NULL));
-
-    GLFWwindow *window = createWindow();
-    if (window == nullptr)
-        return -1;
+public:
     SpriteRenderer spriteRenderer;
-    Arena arena(vec2(100, 0), 300);
-    arena.moveDown(); // force to spawn
-
+    Arena arena;
     Input input;
-    input.arena = &arena;
-    glfwSetWindowUserPointer(window, &input);
-    glfwSetKeyCallback(window, keyCallback);
 
-    mat4 ortho = glm::ortho(0.0f, (float)windowWidth, (float)windowHeight, 0.0f, 0.1f, 100.0f);
-    mat4 view = mat4(1.0);
-    view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
+    mat4 ortho;
+    mat4 view;
 
-    float moveDownMin = 0.04f;
-    float moveDownMax = 0.5f;
-    float moveDownThershold = moveDownMax; // 1 second then tick down
-    float moveDownTime = 0.0f;
-    float lastTime = glfwGetTime();
-    while (!glfwWindowShouldClose(window))
+    Tetris(GLFWwindow *window) : arena(vec2(100, 0), 300)
     {
-        float currTime = glfwGetTime();
-        float deltaTime = currTime - lastTime;
-        lastTime = currTime;
+        arena.moveDown(); // force to spawn
+        input.arena = &arena;
 
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glfwSetWindowUserPointer(window, &input);
+        glfwSetKeyCallback(window, keyCallback);
 
+        ortho = glm::ortho(0.0f, (float)windowWidth, (float)windowHeight, 0.0f, 0.1f, 100.0f);
+        view = mat4(1.0);
+        view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
+    }
+
+    void run(float deltaTime)
+    {
+        // Input
         input.timerTicks(deltaTime);
-        if (input.shouldMoveFaster)
-            moveDownThershold = moveDownMin;
-        else
-            moveDownThershold = moveDownMax;
-
-        auto previewSprites = arena.renderPreview();
-        spriteRenderer.render(previewSprites, view, ortho);
-        auto arenaSprites = arena.render();
-        spriteRenderer.render(arenaSprites, view, ortho);
-        auto arenaBoundarySprites = arena.renderBoundary();
-        spriteRenderer.render(arenaBoundarySprites, view, ortho);
-
-        moveDownTime += deltaTime;
-        if (moveDownTime >= moveDownThershold)
-        {
-            moveDownTime = 0;
-            arena.moveDown();
-        }
+        input.handleMoveDown(deltaTime);
         for (int i = 0; i < input.moveLeftTimer.consumeExec(); ++i)
         {
             arena.moveHorizontal(true, false);
@@ -246,10 +246,50 @@ int main()
             arena.moveHorizontal(false, true);
         }
 
+        // Render
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        auto previewSprites = arena.renderPreview();
+        spriteRenderer.render(previewSprites, view, ortho);
+        auto arenaSprites = arena.render();
+        spriteRenderer.render(arenaSprites, view, ortho);
+        auto arenaBoundarySprites = arena.renderBoundary();
+        spriteRenderer.render(arenaBoundarySprites, view, ortho);
+    }
+};
+
+int main(int argc, char *argv[])
+{
+    srand(time(NULL));
+
+    if (enet_initialize() != 0)
+    {
+        return -1;
+    }
+
+    GLFWwindow *window = createWindow();
+    if (window == nullptr)
+        return -1;
+
+    Tetris tetris(window);
+
+    float lastTime = glfwGetTime();
+    while (!glfwWindowShouldClose(window))
+    {
+        // Delta time
+        float currTime = glfwGetTime();
+        float deltaTime = currTime - lastTime;
+        lastTime = currTime;
+
+        tetris.run(deltaTime);
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
     glfwDestroyWindow(window);
     glfwTerminate();
+    enet_deinitialize();
+    return 0;
 }
