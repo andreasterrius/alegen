@@ -29,7 +29,7 @@ using namespace glm;
 const int windowWidth = 800;
 const int windowHeight = 800;
 const float moveTickTime = 0.08f;
-const float moveTickFirstSticky = 0.3f;
+const float moveTickFirstSticky = 0.2f;
 
 std::filesystem::path getExeParentDirectory()
 {
