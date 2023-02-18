@@ -204,11 +204,6 @@ int main()
     mat4 view = mat4(1.0);
     view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
 
-    auto sprites = vector<Sprite>{
-        Sprite{vec3(vec2(0.0f), 0.0f), vec2(50.0f), vec4(1.0f, 0.0f, 0.0f, 0.0f)},
-        Sprite{vec3(vec2(100.0f), 0.0f), vec2(100.0f), vec4(0.0f, 1.0f, 0.0f, 0.0f)},
-    };
-
     float moveDownMin = 0.04f;
     float moveDownMax = 0.5f;
     float moveDownThershold = moveDownMax; // 1 second then tick down
@@ -229,7 +224,6 @@ int main()
         else
             moveDownThershold = moveDownMax;
 
-        spriteRenderer.render(sprites, view, ortho);
         auto previewSprites = arena.renderPreview();
         spriteRenderer.render(previewSprites, view, ortho);
         auto arenaSprites = arena.render();
