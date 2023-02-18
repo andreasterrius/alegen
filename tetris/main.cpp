@@ -13,6 +13,7 @@
 #include <time.h>
 #include <stdlib.h>
 
+#include "timer.h"
 #include "sprite_renderer.h"
 #include "tetris.h"
 
@@ -27,6 +28,8 @@ using namespace glm;
 
 const int windowWidth = 800;
 const int windowHeight = 800;
+const float moveTickTime = 0.08f;
+const float moveTickFirstSticky = 0.3f;
 
 std::filesystem::path getExeParentDirectory()
 {
@@ -118,38 +121,68 @@ GLFWwindow *createWindow()
 class Input
 {
 public:
-    bool shouldMoveLeft;
-    bool shouldMoveRight;
+    Input() : moveLeftTimer(moveTickTime, moveTickFirstSticky), moveRightTimer(moveTickTime, moveTickFirstSticky)
+    {
+    }
+
+    Timer moveLeftTimer;
+    Timer moveRightTimer;
+    Arena *arena;
     bool shouldMoveFaster;
 
-    void handleEvent(GLFWwindow *window)
+    void timerTicks(float deltaTime)
     {
-        if(glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS){
-            shouldMoveLeft = true;
-            //cout << "left press\n";
-        }
-        if(glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_RELEASE){
-            shouldMoveLeft = false;
-            //cout << "left release\n";
-        }
-        if(glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS){
-            shouldMoveRight = true;
-            //cout << "right press\n";
-        }
-        if(glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_RELEASE){
-            shouldMoveRight = false;
-            //cout << "right release\n";
-        }
-        if(glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS){
-            shouldMoveFaster = true;
-            //cout << "down press\n";
-        }
-        if(glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_RELEASE){
-            shouldMoveFaster = false;
-           // cout << "down release\n";
-        }
+        moveLeftTimer.tick(deltaTime);
+        moveRightTimer.tick(deltaTime);
     }
 };
+
+void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
+{
+    Input *input = static_cast<Input *>(glfwGetWindowUserPointer(window));
+    if (key == GLFW_KEY_LEFT)
+    {
+        if (action == GLFW_PRESS)
+        {
+            input->moveLeftTimer.addExec(1);
+            input->moveLeftTimer.start();
+        }
+        else if (action == GLFW_RELEASE)
+        {
+            input->moveLeftTimer.stop();
+        }
+    }
+    else if (key == GLFW_KEY_RIGHT)
+    {
+        if (action == GLFW_PRESS)
+        {
+            input->moveRightTimer.addExec(1);
+            input->moveRightTimer.start();
+        }
+        else if (action == GLFW_RELEASE)
+        {
+            input->moveRightTimer.stop();
+        }
+    }
+    else if (key == GLFW_KEY_DOWN)
+    {
+        if (action == GLFW_PRESS)
+        {
+            input->shouldMoveFaster = true;
+        }
+        else if (action == GLFW_RELEASE)
+        {
+            input->shouldMoveFaster = false;
+        }
+    }
+    else if (key == GLFW_KEY_SPACE)
+    {
+        if (action == GLFW_PRESS)
+        {
+            input->arena->rotate();
+        }
+    }
+}
 
 int main()
 {
@@ -163,6 +196,9 @@ int main()
     arena.moveDown(); // force to spawn
 
     Input input;
+    input.arena = &arena;
+    glfwSetWindowUserPointer(window, &input);
+    glfwSetKeyCallback(window, keyCallback);
 
     mat4 ortho = glm::ortho(0.0f, (float)windowWidth, (float)windowHeight, 0.0f, 0.1f, 100.0f);
     mat4 view = mat4(1.0);
@@ -172,9 +208,6 @@ int main()
         Sprite{vec3(vec2(0.0f), 0.0f), vec2(50.0f), vec4(1.0f, 0.0f, 0.0f, 0.0f)},
         Sprite{vec3(vec2(100.0f), 0.0f), vec2(100.0f), vec4(0.0f, 1.0f, 0.0f, 0.0f)},
     };
-
-    float inputThershold = 0.1f;
-    float inputTime = 0.0f;
 
     float moveDownMin = 0.04f;
     float moveDownMax = 0.5f;
@@ -190,12 +223,11 @@ int main()
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        input.handleEvent(window);
+        input.timerTicks(deltaTime);
         if (input.shouldMoveFaster)
             moveDownThershold = moveDownMin;
         else
             moveDownThershold = moveDownMax;
-        cout << moveDownThershold << endl;
 
         spriteRenderer.render(sprites, view, ortho);
         auto previewSprites = arena.renderPreview();
@@ -211,11 +243,13 @@ int main()
             moveDownTime = 0;
             arena.moveDown();
         }
-
-        inputTime += deltaTime;
-        if(inputTime >= inputThershold) {
-            inputTime = 0;
-            arena.moveHorizontal(input.shouldMoveLeft, input.shouldMoveRight);
+        for (int i = 0; i < input.moveLeftTimer.consumeExec(); ++i)
+        {
+            arena.moveHorizontal(true, false);
+        }
+        for (int i = 0; i < input.moveRightTimer.consumeExec(); ++i)
+        {
+            arena.moveHorizontal(false, true);
         }
 
         glfwSwapBuffers(window);

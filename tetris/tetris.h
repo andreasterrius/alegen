@@ -6,6 +6,7 @@
 #include <limits>
 #include <memory>
 #include <unordered_set>
+#include <algorithm>
 
 #include <time.h>
 #include <stdlib.h>
@@ -48,7 +49,7 @@ static const vector<vector<vector<vector<int>>>> templates{
          {0, 1, 1, 0},
          {0, 0, 1, 0},
      }},
-#define TYPE_I_ALT 1
+#define TYPE_I 2
     {{
          {0, 0, 1, 0},
          {0, 0, 1, 0},
@@ -60,7 +61,90 @@ static const vector<vector<vector<vector<int>>>> templates{
          {0, 0, 0, 0},
          {1, 1, 1, 1},
          {0, 0, 0, 0},
-     }}};
+     }},
+#define TYPE_BOX 3
+    {{
+        {0, 0, 0, 0},
+        {0, 1, 1, 0},
+        {0, 1, 1, 0},
+        {0, 0, 0, 0},
+    }},
+#define TYPE_L 4
+    {{
+         {0, 0, 0, 0},
+         {0, 1, 0, 0},
+         {0, 1, 0, 0},
+         {0, 1, 1, 0},
+     },
+     {
+         {0, 0, 0, 0},
+         {0, 0, 0, 0},
+         {0, 1, 1, 1},
+         {0, 1, 0, 0},
+     },
+     {
+         {0, 0, 0, 0},
+         {0, 1, 1, 0},
+         {0, 0, 1, 0},
+         {0, 0, 1, 0},
+     },
+     {
+         {0, 0, 0, 0},
+         {0, 0, 0, 0},
+         {0, 0, 1, 0},
+         {1, 1, 1, 0},
+     }},
+#define TYPE_L_ALT 5
+    {{
+         {0, 0, 0, 0},
+         {0, 0, 1, 0},
+         {0, 0, 1, 0},
+         {0, 1, 1, 0},
+     },
+     {
+         {0, 0, 0, 0},
+         {0, 0, 0, 0},
+         {1, 1, 1, 0},
+         {0, 0, 1, 0},
+     },
+     {
+         {0, 0, 0, 0},
+         {0, 1, 1, 0},
+         {0, 1, 0, 0},
+         {0, 1, 0, 0},
+     },
+     {
+         {0, 0, 0, 0},
+         {0, 0, 0, 0},
+         {0, 1, 0, 0},
+         {0, 1, 1, 1},
+     }},
+#define TYPE_T 6
+    {{
+         {0, 0, 0, 0},
+         {0, 1, 0, 0},
+         {0, 1, 1, 0},
+         {0, 1, 0, 0},
+     },
+     {
+         {0, 0, 0, 0},
+         {0, 0, 0, 0},
+         {0, 1, 1, 1},
+         {0, 0, 1, 0},
+     },
+     {
+         {0, 0, 0, 0},
+         {0, 0, 1, 0},
+         {0, 1, 1, 0},
+         {0, 0, 1, 0},
+     },
+     {
+         {0, 0, 0, 0},
+         {0, 0, 1, 0},
+         {0, 1, 1, 1},
+         {0, 0, 0, 0},
+     }}
+    /***/};
 
 class Block
 {
@@ -79,6 +163,20 @@ public:
             ((float)(rand() % 256) / 255),
             ((float)(rand() % 256) / 255));
         return b;
+    }
+
+    Block rotateCopy()
+    {
+        Block b;
+        b.type = type;
+        b.rotation = (rotation + 1) % templates[type].size();
+        b.color = color;
+        return b;
+    }
+
+    void rotate()
+    {
+        rotation = (rotation + 1) % templates[type].size();
     }
 
     vector<Sprite> render(vec2 blockSize)
@@ -143,6 +241,7 @@ public:
                 blocks[i][j] = ArenaBlock{false, false, vec3()};
             }
         }
+        selected = nullptr;
     }
 
     void fillNext()
@@ -168,20 +267,20 @@ public:
         return vec2(kx, kx);
     }
 
-    vector<ivec2> getSelectedIndex()
+    vector<ivec2> getSelectedIndex(Block *b, vec2 index)
     {
         vector<ivec2> indices;
-        if (selected != nullptr)
+        if (b != nullptr)
         {
-            auto block = templates[selected->type][selected->rotation];
+            auto block = templates[b->type][b->rotation];
             for (int i = 0; i < block.size(); ++i)
             {
                 for (int j = 0; j < block[i].size(); ++j)
                 {
                     if (block[i][j] == 0)
                         continue;
-                    int x = selectedIndex.x + j;
-                    int y = selectedIndex.y + i;
+                    int x = index.x + j;
+                    int y = index.y + i;
                     indices.push_back(ivec2(x, y));
                 }
             }
@@ -195,7 +294,7 @@ public:
         {
             return;
         }
-        auto si = getSelectedIndex();
+        auto si = getSelectedIndex(selected.get(), selectedIndex);
 
         if (isLeft)
         {
@@ -233,6 +332,27 @@ public:
         }
     }
 
+    void rotate()
+    {
+        if (selected == nullptr)
+            return;
+        Block rotated = selected->rotateCopy();
+        vector<ivec2> indices = getSelectedIndex(&rotated, selectedIndex);
+
+        for (auto &i : indices)
+        {
+            if (blocks[i.y][i.x].isPlaced ||
+                i.y < 0 || i.y >= ARENA_SIZE_Y ||
+                i.x < 0 || i.x >= ARENA_SIZE_X)
+            {
+                return;
+            }
+        }
+        clearCurrentBlock();
+        selected->rotate();
+        placeCurrentBlock();
+    }
+
     void moveDown()
     {
         if (selected == nullptr)
@@ -241,7 +361,7 @@ public:
         }
 
         bool shouldPlace = false;
-        auto si = getSelectedIndex();
+        auto si = getSelectedIndex(selected.get(), selectedIndex);
         for (auto &s : si)
         {
             if (s.y + 1 >= ARENA_SIZE_Y || blocks[s.y + 1][s.x].isPlaced)
@@ -279,7 +399,7 @@ public:
 
     void clearCurrentBlock()
     {
-        auto si = getSelectedIndex();
+        auto si = getSelectedIndex(selected.get(), selectedIndex);
         for (auto &s : si)
         {
             blocks[s.y][s.x] = ArenaBlock{false, false, selected->color};
@@ -288,7 +408,7 @@ public:
 
     void placeCurrentBlock()
     {
-        auto si = getSelectedIndex();
+        auto si = getSelectedIndex(selected.get(), selectedIndex);
         for (auto &s : si)
         {
             blocks[s.y][s.x] = ArenaBlock{false, true, selected->color};
@@ -297,10 +417,73 @@ public:
 
     void dead()
     {
+        resetArena();
     }
 
     void scoreCheck(unordered_set<int> &checkY)
     {
+        deque<int> lineYIndex;
+        unordered_set<int> ignorePullDownY;
+
+        // find complete lines
+        vector<int> sortedY(checkY.begin(), checkY.end());
+        sort(sortedY.begin(), sortedY.end(), greater<int>());
+        for (auto &y : sortedY)
+        {
+            bool hasALine = true;
+            for (int x = 0; x < ARENA_SIZE_X; ++x)
+            {
+                if (!blocks[y][x].isFilled)
+                {
+                    hasALine = false;
+                    break;
+                }
+            }
+
+            if (hasALine)
+            {
+                ignorePullDownY.insert(y);
+                lineYIndex.push_back(y);
+            }
+        }
+
+        // pull down
+        bool hasFoundEmptyRow = false;
+        while (!lineYIndex.empty())
+        {
+            int currY = lineYIndex.front();
+            lineYIndex.pop_front();
+
+            if (hasFoundEmptyRow)
+            {
+                for (int j = 0; j < ARENA_SIZE_X; ++j)
+                {
+                    blocks[currY][j] = ArenaBlock{false, false, vec3()};
+                }
+                continue;
+            }
+
+            for (int i = currY - 1; i >= 0; --i)
+            {
+                if (ignorePullDownY.find(i) != ignorePullDownY.end())
+                {
+                    continue;
+                }
+                int ec = 0;
+                for (int j = 0; j < ARENA_SIZE_X; ++j)
+                {
+                    if (!blocks[i][j].isFilled)
+                        ec++;
+                    blocks[currY][j] = blocks[i][j];
+                    blocks[i][j] = ArenaBlock{false, false, vec3()};
+                }
+                if (ec == ARENA_SIZE_X)
+                    hasFoundEmptyRow = true;
+                lineYIndex.push_back(i);
+                ignorePullDownY.insert(i);
+                break;
+            }
+        }
     }
 
     vector<Sprite> renderPreview()
