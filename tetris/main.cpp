@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <enet/enet.h>
+#include <argparse/argparse.hpp>
 
 #include <string>
 #include <iostream>
@@ -31,6 +32,35 @@ const int windowWidth = 800;
 const int windowHeight = 800;
 const float moveTickTime = 0.08f;
 const float moveTickFirstSticky = 0.2f;
+
+struct Args
+{
+    bool dedicatedServer;
+};
+
+bool handleArgs(Args *args, int argc, char *argv[])
+{
+    argparse::ArgumentParser program("tetris");
+
+    program.add_argument("--server")
+        .help("run as dedicated server")
+        .default_value(false)
+        .implicit_value(true);
+
+    try
+    {
+        program.parse_args(argc, argv);
+    }
+    catch (const std::runtime_error &err)
+    {
+        std::cerr << err.what() << std::endl;
+        std::cerr << program;
+        return false;
+    }
+
+    args->dedicatedServer = program.get<bool>("server");
+    return true;
+}
 
 std::filesystem::path getExeParentDirectory()
 {
@@ -212,6 +242,7 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
 class Tetris
 {
 public:
+    GLFWwindow *window;
     SpriteRenderer spriteRenderer;
     Arena arena;
     Input input;
@@ -219,8 +250,13 @@ public:
     mat4 ortho;
     mat4 view;
 
-    Tetris(GLFWwindow *window) : arena(vec2(100, 0), 300)
+    Tetris() : arena(vec2(100, 0), 300), window(createWindow()), spriteRenderer()
     {
+        if (window == nullptr) {
+            cout << "window creation failed" << endl;
+            return;
+        }
+
         arena.moveDown(); // force to spawn
         input.arena = &arena;
 
@@ -232,30 +268,55 @@ public:
         view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
     }
 
-    void run(float deltaTime)
+    ~Tetris()
     {
-        // Input
-        input.timerTicks(deltaTime);
-        input.handleMoveDown(deltaTime);
-        for (int i = 0; i < input.moveLeftTimer.consumeExec(); ++i)
-        {
-            arena.moveHorizontal(true, false);
-        }
-        for (int i = 0; i < input.moveRightTimer.consumeExec(); ++i)
-        {
-            arena.moveHorizontal(false, true);
-        }
+        glfwDestroyWindow(window);
+        glfwTerminate();
+    }
 
-        // Render
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+    void run()
+    {
+        float lastTime = glfwGetTime();
+        while (!glfwWindowShouldClose(window))
+        {
+            // Delta time
+            float currTime = glfwGetTime();
+            float deltaTime = currTime - lastTime;
+            lastTime = currTime;
 
-        auto previewSprites = arena.renderPreview();
-        spriteRenderer.render(previewSprites, view, ortho);
-        auto arenaSprites = arena.render();
-        spriteRenderer.render(arenaSprites, view, ortho);
-        auto arenaBoundarySprites = arena.renderBoundary();
-        spriteRenderer.render(arenaBoundarySprites, view, ortho);
+            // Input
+            input.timerTicks(deltaTime);
+            input.handleMoveDown(deltaTime);
+            for (int i = 0; i < input.moveLeftTimer.consumeExec(); ++i)
+            {
+                arena.moveHorizontal(true, false);
+            }
+            for (int i = 0; i < input.moveRightTimer.consumeExec(); ++i)
+            {
+                arena.moveHorizontal(false, true);
+            }
+
+            // Render
+            glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+
+            auto previewSprites = arena.renderPreview();
+            spriteRenderer.render(previewSprites, view, ortho);
+            auto arenaSprites = arena.render();
+            spriteRenderer.render(arenaSprites, view, ortho);
+            auto arenaBoundarySprites = arena.renderBoundary();
+            spriteRenderer.render(arenaBoundarySprites, view, ortho);
+
+            glfwSwapBuffers(window);
+            glfwPollEvents();
+        }
+    }
+};
+
+class Server {
+public:
+    void run(){
+
     }
 };
 
@@ -263,33 +324,25 @@ int main(int argc, char *argv[])
 {
     srand(time(NULL));
 
+    Args args;
+    if (!handleArgs(&args, argc, argv))
+    {
+        return -1;
+    }
+
     if (enet_initialize() != 0)
     {
         return -1;
     }
 
-    GLFWwindow *window = createWindow();
-    if (window == nullptr)
-        return -1;
-
-    Tetris tetris(window);
-
-    float lastTime = glfwGetTime();
-    while (!glfwWindowShouldClose(window))
-    {
-        // Delta time
-        float currTime = glfwGetTime();
-        float deltaTime = currTime - lastTime;
-        lastTime = currTime;
-
-        tetris.run(deltaTime);
-
-        glfwSwapBuffers(window);
-        glfwPollEvents();
+    if(args.dedicatedServer) {
+        Server server;
+        server.run();
+    } else {
+        Tetris tetris;
+        tetris.run();
     }
 
-    glfwDestroyWindow(window);
-    glfwTerminate();
     enet_deinitialize();
     return 0;
 }

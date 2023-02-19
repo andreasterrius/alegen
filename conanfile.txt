@@ -3,6 +3,7 @@ glfw/[>=3.3]
 glad/[>=0.1.29]
 glm/[>=0.9.9]
 enet/[>=1.3.17]
+argparse/[>=2.9]
 
 [options]
 glad:gl_profile=core
