@@ -14,6 +14,9 @@
 #include <filesystem>
 #include <time.h>
 #include <stdlib.h>
+#include <thread>
+#include <mutex>
+#include <queue>
 
 #include "timer.h"
 #include "sprite_renderer.h"
@@ -28,6 +31,7 @@
 using namespace std;
 using namespace glm;
 
+const int serverTickMs = 1000;
 const int windowWidth = 800;
 const int windowHeight = 800;
 const float moveTickTime = 0.08f;
@@ -135,7 +139,7 @@ GLFWwindow *createWindow()
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 
-    GLFWwindow *window = glfwCreateWindow((int)windowWidth, (int)windowHeight, "Main Window", nullptr, nullptr);
+    GLFWwindow *window = glfwCreateWindow((int)windowWidth, (int)windowHeight, "AleTetris", nullptr, nullptr);
     if (!window)
     {
         glfwTerminate();
@@ -252,7 +256,8 @@ public:
 
     Tetris() : arena(vec2(100, 0), 300), window(createWindow()), spriteRenderer()
     {
-        if (window == nullptr) {
+        if (window == nullptr)
+        {
             cout << "window creation failed" << endl;
             return;
         }
@@ -313,10 +318,77 @@ public:
     }
 };
 
-class Server {
-public:
-    void run(){
+struct ClientData
+{
+};
 
+struct GameEvent
+{
+};
+
+class Server
+{
+    mutex mtx;
+    queue<GameEvent> gameEventQueue;
+
+public:
+    void run()
+    {
+        thread checkConnThread(checkConnection);
+        thread gameTickThread(gameTick);
+    }
+
+    void gameTick()
+    {
+    }
+
+    void checkConnection()
+    {
+        ENetAddress address = {0};
+        address.host = ENET_HOST_ANY;
+        address.port = 7777;
+
+        const int maxClients = 5;
+        ENetHost *server = enet_host_create(&address, maxClients, 2, 0, 0);
+        if (server == NULL)
+        {
+            cout << "Error occurred while trying to create an ENet server host\n";
+            return;
+        }
+        cout << "Starting a server...\n";
+
+        ENetEvent event;
+        while (enet_host_service(server, &event, serverTickMs))
+        {
+            switch (event.type)
+            {
+            case ENET_EVENT_TYPE_CONNECT:
+                printf("A new client connected from %x:%u.\n", event.peer->address.host, event.peer->address.port);
+                /* Store any relevant client information here. */
+                ClientData clientData;
+                event.peer->data = &clientData;
+                break;
+
+            case ENET_EVENT_TYPE_RECEIVE:
+                printf("A packet of length %lu containing %s was received from %s on channel %u.\n",
+                       event.packet->dataLength,
+                       event.packet->data,
+                       event.peer->data,
+                       event.channelID);
+                /* Clean up the packet now that we're done using it. */
+                enet_packet_destroy(event.packet);
+                break;
+
+            case ENET_EVENT_TYPE_DISCONNECT:
+                printf("%s disconnected.\n", event.peer->data);
+                /* Reset the peer's client information. */
+                event.peer->data = NULL;
+                break;
+
+            case ENET_EVENT_TYPE_NONE:
+                break;
+            }
+        }
     }
 };
 
@@ -335,10 +407,13 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    if(args.dedicatedServer) {
+    if (args.dedicatedServer)
+    {
         Server server;
         server.run();
-    } else {
+    }
+    else
+    {
         Tetris tetris;
         tetris.run();
     }
