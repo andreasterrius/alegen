@@ -201,6 +201,14 @@ public:
     }
 };
 
+class SelectedBlockChangeListener
+{
+public:
+    virtual void onChange(Block *b) = 0;
+
+    virtual void onPlace(Block *b, unordered_set<int> *checkY) = 0;
+};
+
 struct ArenaBlock
 {
 public:
@@ -215,6 +223,7 @@ public:
     vec2 position;
     vec2 size;
     deque<Block> next;
+    SelectedBlockChangeListener *sbcl;
 
     vec2 selectedIndex;
     unique_ptr<Block> selected;
@@ -223,6 +232,7 @@ public:
 
     Arena(vec2 position, int sizeX)
     {
+        sbcl = nullptr;
         this->position = position;
         size.x = sizeX;
         vec2 b = getBlockSize();
@@ -384,6 +394,7 @@ public:
                     return;
                 }
             }
+            sbcl->onPlace(selected.get(), &checkY);
             scoreCheck(checkY);
             selected = nullptr;
             return;
@@ -413,6 +424,8 @@ public:
         {
             blocks[s.y][s.x] = ArenaBlock{false, true, selected->color};
         }
+        if(sbcl != nullptr)
+            sbcl->onChange(selected.get());
     }
 
     void dead()

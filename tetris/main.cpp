@@ -153,6 +153,17 @@ GLFWwindow *createWindow()
     return window;
 }
 
+class BlockChangeReplicator : public SelectedBlockChangeListener {
+    void onChange(Block *b) override {
+        cout << "on change" << endl;
+        // should send message to server here
+    }
+
+    void onPlace(Block *b, unordered_set<int> *checkY) override {
+        cout << "on place" << endl;
+    }
+};
+
 class Input
 {
 public:
@@ -271,6 +282,8 @@ public:
         ortho = glm::ortho(0.0f, (float)windowWidth, (float)windowHeight, 0.0f, 0.1f, 100.0f);
         view = mat4(1.0);
         view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
+
+        arena.sbcl = new BlockChangeReplicator();
     }
 
     ~Tetris()
@@ -322,6 +335,15 @@ struct ClientData
 {
 };
 
+struct ClientToServerData {
+    // Frequent update
+    vec3 selectedBlockPosition;
+    Block selectedBlock;
+
+    // Sometimes update
+    vector<vector<ArenaBlock>> blocks; 
+};
+
 struct GameEvent
 {
 };
@@ -332,14 +354,22 @@ class Server
     queue<GameEvent> gameEventQueue;
 
 public:
+    Server(){
+    }
+    
     void run()
     {
-        thread checkConnThread(checkConnection);
-        thread gameTickThread(gameTick);
+        thread checkConnThread(&Server::checkConnection, this);
+        thread gameTickThread(&Server::gameTick, this);
+
+        cout << "suspending until server is done";
+        checkConnThread.join();
+        gameTickThread.join();
     }
 
     void gameTick()
     {
+        
     }
 
     void checkConnection()
@@ -352,10 +382,10 @@ public:
         ENetHost *server = enet_host_create(&address, maxClients, 2, 0, 0);
         if (server == NULL)
         {
-            cout << "Error occurred while trying to create an ENet server host\n";
+            cout << "Error occurred while trying to create an ENet server host" << endl;
             return;
         }
-        cout << "Starting a server...\n";
+        cout << "Starting a server..."  << endl;
 
         ENetEvent event;
         while (enet_host_service(server, &event, serverTickMs))
