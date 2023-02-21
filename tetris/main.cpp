@@ -21,6 +21,7 @@
 #include "timer.h"
 #include "sprite_renderer.h"
 #include "tetris.h"
+#include "util.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -40,6 +41,9 @@ const float moveTickFirstSticky = 0.2f;
 struct Args
 {
     bool dedicatedServer;
+
+    string hostIp;
+    int hostPort;
 };
 
 bool handleArgs(Args *args, int argc, char *argv[])
@@ -50,6 +54,10 @@ bool handleArgs(Args *args, int argc, char *argv[])
         .help("run as dedicated server")
         .default_value(false)
         .implicit_value(true);
+
+    program.add_argument("--host")
+        .help("host address to connect to")
+        .default_value("");
 
     try
     {
@@ -63,6 +71,16 @@ bool handleArgs(Args *args, int argc, char *argv[])
     }
 
     args->dedicatedServer = program.get<bool>("server");
+
+    vector<string> host;//= stringSplit(program.get<string>("host"), ":");
+    args->hostIp = host.size() >= 1 ? host[0] : "";
+    try {
+        args->hostPort = stoi(host.size() >= 2 ? host[1] : "");
+    } catch (invalid_argument &e){
+        cout << "invalid host port is given\n";
+        args->hostPort = 0;
+    }
+
     return true;
 }
 
@@ -154,7 +172,16 @@ GLFWwindow *createWindow()
 }
 
 class BlockChangeReplicator : public SelectedBlockChangeListener {
+public:
+    BlockChangeReplicator() {
+
+    }
+
     void onChange(Block *b) override {
+
+        ENetPacket *packet = enet_packet_create(b, sizeof(Block), 0);
+        //enet_peer_send();
+
         cout << "on change" << endl;
         // should send message to server here
     }
@@ -335,15 +362,6 @@ struct ClientData
 {
 };
 
-struct ClientToServerData {
-    // Frequent update
-    vec3 selectedBlockPosition;
-    Block selectedBlock;
-
-    // Sometimes update
-    vector<vector<ArenaBlock>> blocks; 
-};
-
 struct GameEvent
 {
 };
@@ -362,7 +380,7 @@ public:
         thread checkConnThread(&Server::checkConnection, this);
         thread gameTickThread(&Server::gameTick, this);
 
-        cout << "suspending until server is done";
+        cout << "Suspending until server is done\n";
         checkConnThread.join();
         gameTickThread.join();
     }
@@ -444,6 +462,13 @@ int main(int argc, char *argv[])
     }
     else
     {
+        if(args.hostIp != "" && args.hostPort != 0) {
+            ENetHost *client = enet_host_create(NULL, 1, 2, 0, 0);
+            ENetAddress address;
+            enet_address_set_host(&address, args.hostIp.c_str());
+            address.port = args.hostPort;
+            ENetPeer *serverPeer = enet_host_connect(client, &address, 2, 0);
+        }
         Tetris tetris;
         tetris.run();
     }
