@@ -6,6 +6,7 @@ set(CMAKE_BUILD_TYPE Debug CACHE STRING "")
 project(diagen)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 
 if (NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
    message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")

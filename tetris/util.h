@@ -5,14 +5,27 @@
 
 using namespace std;
 
-vector<string> stringSplit(string s, string delimiter) {
-    size_t pos = 0;
-    std::string token;
-    vector<string> strs;
-    while ((pos = s.find(delimiter)) != std::string::npos) {
-        token = s.substr(0, pos);
-        strs.push_back(token);
-        s.erase(0, pos + delimiter.length());
+std::vector<std::string> stringSplit(const std::string& str, const std::string& delim) {
+    std::vector<std::string> result;
+
+    if (delim.empty()) {
+        result.push_back(str);
+        return result;
     }
-    return strs;
+
+    if (str.empty()) {
+        return result;
+    }
+
+    std::string::size_type start = 0;
+    std::string::size_type end = 0;
+
+    while ((end = str.find(delim, start)) != std::string::npos) {
+        result.push_back(str.substr(start, end - start));
+        start = end + delim.length();
+    }
+
+    result.push_back(str.substr(start));
+
+    return result;
 }

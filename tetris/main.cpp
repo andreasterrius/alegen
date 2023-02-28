@@ -3,7 +3,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <enet/enet.h>
-#include <argparse/argparse.hpp>
+#include <cxxopts.hpp>
 
 #include <string>
 #include <iostream>
@@ -17,6 +17,7 @@
 #include <thread>
 #include <mutex>
 #include <queue>
+#include <atomic>
 
 #include "timer.h"
 #include "sprite_renderer.h"
@@ -48,38 +49,33 @@ struct Args
 
 bool handleArgs(Args *args, int argc, char *argv[])
 {
-    argparse::ArgumentParser program("tetris");
+    using namespace cxxopts;
+    Options options("Tetris", "a heartpounding versus tetris game");
+    options.add_options()
+        ("s,server", "Enable dedicated server", value<bool>()->default_value("false"))
+        ("c,client", "Connect to a given <ip>:<port> server", value<string>()->default_value("")),
+        ("h,help", "Print usage");
+    auto result = options.parse(argc, argv);
+    if (result.count("help"))
+    {
+      cout << options.help() << endl;
+      exit(0);
+    }
 
-    program.add_argument("--server")
-        .help("run as dedicated server")
-        .default_value(false)
-        .implicit_value(true);
 
-    program.add_argument("--host")
-        .help("host address to connect to")
-        .default_value("");
-
+    args->dedicatedServer = result["server"].as<bool>();
+    vector<string> host = stringSplit(result["client"].as<string>(), ":");
+    args->hostIp = host.size() >= 1 ? host[0] : "none";
     try
     {
-        program.parse_args(argc, argv);
-    }
-    catch (const std::runtime_error &err)
-    {
-        std::cerr << err.what() << std::endl;
-        std::cerr << program;
-        return false;
-    }
-
-    args->dedicatedServer = program.get<bool>("server");
-
-    vector<string> host;//= stringSplit(program.get<string>("host"), ":");
-    args->hostIp = host.size() >= 1 ? host[0] : "";
-    try {
         args->hostPort = stoi(host.size() >= 2 ? host[1] : "");
-    } catch (invalid_argument &e){
-        cout << "invalid host port is given\n";
+    }
+    catch (invalid_argument &e)
+    {
         args->hostPort = 0;
     }
+
+    cout << "client: " << args->hostIp << ":"  << args->hostPort << " " << endl;
 
     return true;
 }
@@ -171,22 +167,25 @@ GLFWwindow *createWindow()
     return window;
 }
 
-class BlockChangeReplicator : public SelectedBlockChangeListener {
+class BlockChangeReplicator : public SelectedBlockChangeListener
+{
 public:
-    BlockChangeReplicator() {
-
+    BlockChangeReplicator()
+    {
     }
 
-    void onChange(Block *b) override {
+    void onChange(Block *b) override
+    {
 
         ENetPacket *packet = enet_packet_create(b, sizeof(Block), 0);
-        //enet_peer_send();
+        // enet_peer_send();
 
         cout << "on change" << endl;
         // should send message to server here
     }
 
-    void onPlace(Block *b, unordered_set<int> *checkY) override {
+    void onPlace(Block *b, unordered_set<int> *checkY) override
+    {
         cout << "on place" << endl;
     }
 };
@@ -372,22 +371,15 @@ class Server
     queue<GameEvent> gameEventQueue;
 
 public:
-    Server(){
+    Server()
+    {
     }
-    
+
     void run()
     {
         thread checkConnThread(&Server::checkConnection, this);
-        thread gameTickThread(&Server::gameTick, this);
-
         cout << "Suspending until server is done\n";
         checkConnThread.join();
-        gameTickThread.join();
-    }
-
-    void gameTick()
-    {
-        
     }
 
     void checkConnection()
@@ -403,11 +395,12 @@ public:
             cout << "Error occurred while trying to create an ENet server host" << endl;
             return;
         }
-        cout << "Starting a server..."  << endl;
+        cout << "Starting a server..." << endl;
 
         ENetEvent event;
-        while (enet_host_service(server, &event, serverTickMs))
+        while (true)
         {
+            int code = enet_host_service(server, &event, serverTickMs);
             switch (event.type)
             {
             case ENET_EVENT_TYPE_CONNECT:
@@ -417,6 +410,79 @@ public:
                 event.peer->data = &clientData;
                 break;
 
+            case ENET_EVENT_TYPE_RECEIVE:
+                printf("A packet of length %lu containing %s was received from %s on channel %u.\n",
+                       event.packet->dataLength,
+                       event.packet->data,
+                       event.peer->data,
+                       event.channelID);
+                /* Clean up the packet now that we're done using it. */
+                enet_packet_destroy(event.packet);
+                break;
+
+            case ENET_EVENT_TYPE_DISCONNECT:
+                printf("%s disconnected.\n", event.peer->data);
+                /* Reset the peer's client information. */
+                event.peer->data = NULL;
+                break;
+
+            case ENET_EVENT_TYPE_NONE:
+                break;
+            }
+        }
+    }
+};
+
+class Client
+{
+public:
+    string hostIp;
+    int hostPort;
+    ENetHost *client;
+    atomic_bool shouldQuit;
+
+    Client(string hostIp, int hostPort) : hostIp(hostIp), hostPort(hostPort), shouldQuit(false)
+    {
+    }
+
+    void run()
+    {
+        thread checkConnThread;
+        bool checkConnRunning = false;
+        if (hostIp != "" && hostPort != 0)
+        {
+            client = enet_host_create(NULL, 1, 2, 0, 0);
+            ENetAddress address;
+            enet_address_set_host(&address, hostIp.c_str());
+            address.port = hostPort;
+            ENetPeer *serverPeer = enet_host_connect(client, &address, 2, 0);
+            checkConnThread = thread(&Client::checkConnection, this);
+            checkConnRunning = true;
+        }
+
+        Tetris tetris;
+        tetris.run();
+
+        shouldQuit = true;
+
+        if(checkConnRunning) {
+            checkConnThread.join();
+        }
+    }
+
+    void checkConnection()
+    {
+        ENetEvent event;
+        while (!shouldQuit.load())
+        {
+            enet_host_service(client, &event, serverTickMs);
+            switch (event.type)
+            {
+            case ENET_EVENT_TYPE_CONNECT:
+                printf("A new client connected from %x:%u.\n", event.peer->address.host, event.peer->address.port);
+                /* Store any relevant client information here. */
+                break;
+        
             case ENET_EVENT_TYPE_RECEIVE:
                 printf("A packet of length %lu containing %s was received from %s on channel %u.\n",
                        event.packet->dataLength,
@@ -462,15 +528,8 @@ int main(int argc, char *argv[])
     }
     else
     {
-        if(args.hostIp != "" && args.hostPort != 0) {
-            ENetHost *client = enet_host_create(NULL, 1, 2, 0, 0);
-            ENetAddress address;
-            enet_address_set_host(&address, args.hostIp.c_str());
-            address.port = args.hostPort;
-            ENetPeer *serverPeer = enet_host_connect(client, &address, 2, 0);
-        }
-        Tetris tetris;
-        tetris.run();
+        Client client(args.hostIp, args.hostPort);
+        client.run();
     }
 
     enet_deinitialize();
