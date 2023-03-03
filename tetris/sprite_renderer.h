@@ -80,6 +80,8 @@ struct Sprite
     vec3 position;
     vec2 size;
     vec3 color;
+
+    GLuint textureID;
 };
 
 class SpriteRenderer

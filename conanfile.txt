@@ -4,6 +4,7 @@ glad/[>=0.1.29]
 glm/[>=0.9.9]
 enet/[>=1.3.17]
 cxxopts/[>=3.0.0]
+freetype/[>=2.13.0]
 
 [options]
 glad:gl_profile=core

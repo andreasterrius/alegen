@@ -20,6 +20,7 @@
 #include <atomic>
 
 #include "timer.h"
+#include "text_renderer.h"
 #include "sprite_renderer.h"
 #include "tetris.h"
 #include "util.h"
@@ -285,13 +286,15 @@ class Tetris
 public:
     GLFWwindow *window;
     SpriteRenderer spriteRenderer;
+    TextRenderer textRenderer;
     Arena arena;
     Input input;
 
     mat4 ortho;
     mat4 view;
 
-    Tetris() : arena(vec2(100, 0), 300), window(createWindow()), spriteRenderer()
+    Tetris() : arena(vec2(100, 0), 300), window(createWindow()), spriteRenderer(), 
+        textRenderer("resources/font/Roboto/Roboto-Regular.ttf")
     {
         if (window == nullptr)
         {
