@@ -81,7 +81,7 @@ struct Sprite
     vec2 size;
     vec3 color;
 
-    GLuint textureID;
+    GLuint textureId;
 };
 
 class SpriteRenderer
@@ -144,6 +144,9 @@ public:
 
             int colorLoc = glGetUniformLocation(spriteShader, "color");
             glUniform4fv(colorLoc, 1, &sprite.color[0]);
+
+            // render glyph texture over quad
+            glBindTexture(GL_TEXTURE_2D, sprite.textureId);
 
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         }

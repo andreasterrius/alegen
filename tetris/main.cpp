@@ -354,6 +354,9 @@ public:
             auto arenaBoundarySprites = arena.renderBoundary();
             spriteRenderer.render(arenaBoundarySprites, view, ortho);
 
+            auto textSprites = textRenderer.layoutText(vec3(0.0), "abcdef");
+            spriteRenderer.render(textSprites, view, ortho);
+
             glfwSwapBuffers(window);
             glfwPollEvents();
         }
