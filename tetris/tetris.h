@@ -543,7 +543,7 @@ public:
                 sprites.push_back(Sprite{
                     vec3(startPos + vec2(j * blockSize.x, i * blockSize.y), 0.0),
                     vec2(blockSize),
-                    blocks[i][j].color});
+                    vec4(blocks[i][j].color, SOLID)});
             }
         }
 
@@ -561,7 +561,7 @@ public:
         vec2 bottomLeft = vec2(topLeft.x, size.y - ARENA_HIDDEN_HEIGHT * blockSize.y);
         vec2 topRight = vec2(position.x + size.x, position.y);
 
-        vec4 color = vec4(vec3(1.0), 1.0);
+        vec4 color = vec4(vec3(1.0), SOLID);
 
         return vector<Sprite>{
             Sprite{vec3(topLeft, 0.0), vec2(halfBlockSize.x, size.y - ARENA_HIDDEN_HEIGHT * blockSize.y), color},

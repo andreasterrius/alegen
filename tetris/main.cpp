@@ -133,6 +133,8 @@ static bool setupOpenGL()
     // glEnable(GL_BLEND);
     // glDepthFunc(GL_LEQUAL);
     // glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
 
     return true;
 }
@@ -141,8 +143,8 @@ GLFWwindow *createWindow()
 {
     filesystem::current_path(getExeParentDirectory());
 
-    glfwSetErrorCallback([](int error, const char *description)
-                         { fprintf(stderr, "GLFW Error %d: %s\n", error, description); });
+    // glfwSetErrorCallback([](int error, const char *description)
+    //                      { fprintf(stderr, "GLFW Error %d: %s\n", error, description); });
     if (!glfwInit())
         return nullptr;
 
@@ -152,7 +154,7 @@ GLFWwindow *createWindow()
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_FALSE);
 
     GLFWwindow *window = glfwCreateWindow((int)windowWidth, (int)windowHeight, "AleTetris", nullptr, nullptr);
     if (!window)
@@ -181,13 +183,13 @@ public:
         ENetPacket *packet = enet_packet_create(b, sizeof(Block), 0);
         // enet_peer_send();
 
-        cout << "on change" << endl;
+        // cout << "on change" << endl;
         // should send message to server here
     }
 
     void onPlace(Block *b, unordered_set<int> *checkY) override
     {
-        cout << "on place" << endl;
+        //cout << "on place" << endl;
     }
 };
 
@@ -354,7 +356,7 @@ public:
             auto arenaBoundarySprites = arena.renderBoundary();
             spriteRenderer.render(arenaBoundarySprites, view, ortho);
 
-            auto textSprites = textRenderer.layoutText(vec3(0.0), "abcdef");
+            auto textSprites = textRenderer.layoutText(vec3(300.0f, 300.0f, 0.0f), "abcdefghijk");
             spriteRenderer.render(textSprites, view, ortho);
 
             glfwSwapBuffers(window);
@@ -537,7 +539,4 @@ int main(int argc, char *argv[])
         Client client(args.hostIp, args.hostPort);
         client.run();
     }
-
-    enet_deinitialize();
-    return 0;
 }

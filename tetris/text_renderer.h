@@ -61,6 +61,7 @@ public:
         if(FT_New_Face(library, path.c_str(), 0 , &face)) {
             throw runtime_error("unable to load FT_New_Face");
         }
+        FT_Set_Pixel_Sizes(face, 0, 48);  
 
         defaultFontKey = FontKey{path};
 
@@ -71,6 +72,9 @@ public:
         if(fonts.find(defaultFontKey) == fonts.end()) {
             return {};
         }
+
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        
         //gives 0 shit about unicode for now
         vector<Sprite> sprites;
         for(int i = 0; i < text.size(); ++i) {
@@ -79,16 +83,14 @@ public:
                     cout << "unable to render " << text[i] << " glyph" << endl;
                     continue;
                 }
-                FT_Bitmap bitmap = face->glyph->bitmap;
-                int width = bitmap.width;
-                int height = bitmap.rows;
-                unsigned char* pixels = bitmap.buffer;
+                int width = face->glyph->bitmap.width;
+                int height = face->glyph->bitmap.rows;
 
                 // Create an OpenGL texture object from the glyph bitmap
                 GLuint textureId;
                 glGenTextures(1, &textureId);
                 glBindTexture(GL_TEXTURE_2D, textureId);
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, pixels);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, face->glyph->bitmap.buffer);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -98,22 +100,16 @@ public:
                     width, height, 
                     (int) face->glyph->advance.x, (int) face->glyph->advance.y,
                     (int) face->glyph->bitmap_left, (int) face->glyph->bitmap_top,
+                    textureId,
                 };
             }
-            FontCharacter fc = fonts[defaultFontKey][string(&text[i])];
-            int advanceX = fc.advanceX >> 6;
-            int advanceY = fc.advanceY >> 6;
-            int bitmapWidth = fc.width;
-            int bitmapHeight = fc.height;
-            int bearingX = fc.bearingX;
-            int bearingY = fc.bearingY;
-
-            originPos.x += bearingX;
-            originPos.y -= bearingY;
-            sprites.push_back(Sprite{originPos, vec2(bitmapWidth, bitmapHeight), vec3(1.0), fc.textureId});
+            FontCharacter fc = fonts[defaultFontKey][string(&text[i])];    
+            float x = originPos.x + fc.bearingX;
+            float y = originPos.y - fc.bearingY;
+        
+            sprites.push_back(Sprite{vec3(x, y, originPos.z), vec2(fc.width, fc.height), vec4(vec3(1.0),SOLID), fc.textureId});
             
-            originPos.x += advanceX;
-            originPos.y += advanceY;
+            originPos.x += (fc.advanceX >> 6);
         }
 
         return sprites;

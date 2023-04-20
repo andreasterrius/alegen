@@ -5,8 +5,13 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "logger.h"
+
 using namespace std;
 using namespace glm;
+
+#define SOLID 1.0
+#define TRANSPARENT 0.0
 
 string readFile(string fileName)
 {
@@ -36,6 +41,8 @@ unsigned int createShader(string &vertexShaderSource, string &fragmentShaderSour
         glGetShaderInfoLog(vertexShader, 1024, NULL, infoLog);
         cout << "vertex compile error:\n"
              << infoLog << "\n";
+
+        LOG("vertex compile error: " + string(infoLog));
     }
 
     unsigned int fragmentShader;
@@ -51,6 +58,8 @@ unsigned int createShader(string &vertexShaderSource, string &fragmentShaderSour
         glGetShaderInfoLog(fragmentShader, 1024, NULL, infoLog);
         cout << "fragment compile error:\n"
              << infoLog << "\n";
+
+        LOG("fragment compile error: " + string(infoLog));
     }
 
     unsigned int shaderProgram;
@@ -79,7 +88,7 @@ struct Sprite
 {
     vec3 position;
     vec2 size;
-    vec3 color;
+    vec4 color;
 
     GLuint textureId;
 };
@@ -89,6 +98,7 @@ class SpriteRenderer
 public:
     int VAO, VBO;
     int spriteShader;
+    unsigned int dummyTextureId;
 
     SpriteRenderer()
     {
@@ -120,6 +130,16 @@ public:
         this->spriteShader = createShader(vertexShaderSource, fragmentShaderSource);
         this->VAO = VAO;
         this->VBO = VBO;
+
+        // generate a dummy texture here
+        glGenTextures(1, &dummyTextureId);
+        glBindTexture(GL_TEXTURE_2D, dummyTextureId);
+        const unsigned char whitePixel[] = {255, 255, 255, 255};
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, whitePixel);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glBindTexture(GL_TEXTURE_2D, 0);
     }
 
     void render(vector<Sprite> sprites, mat4 view, mat4 proj)
@@ -146,7 +166,11 @@ public:
             glUniform4fv(colorLoc, 1, &sprite.color[0]);
 
             // render glyph texture over quad
-            glBindTexture(GL_TEXTURE_2D, sprite.textureId);
+            if(sprite.textureId == 0) {
+                glBindTexture(GL_TEXTURE_2D, dummyTextureId);
+            } else {
+                glBindTexture(GL_TEXTURE_2D, sprite.textureId);
+            }
 
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         }
