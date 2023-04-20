@@ -17,7 +17,7 @@ void main()
     else
     {
         // finalColor = vec4(fragColor.x, fragColor.y, fragColor.z, 1.0);
-         finalColor = vec4(1.0, 0.0, 0.0, texture(tex, texCoord).r);
+         finalColor = vec4(vec3(fragColor.x, fragColor.y, fragColor.z), texture(tex, texCoord).r);
         // finalColor = fragColor;
     }
 }

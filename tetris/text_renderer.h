@@ -68,7 +68,7 @@ public:
         fonts[defaultFontKey] = {};
     }
 
-    vector<Sprite> layoutText(vec3 originPos, string text) {
+    vector<Sprite> layoutText(vec3 originPos, string text, vec3 color) {
         if(fonts.find(defaultFontKey) == fonts.end()) {
             return {};
         }
@@ -107,7 +107,7 @@ public:
             float x = originPos.x + fc.bearingX;
             float y = originPos.y - fc.bearingY;
         
-            sprites.push_back(Sprite{vec3(x, y, originPos.z), vec2(fc.width, fc.height), vec4(vec3(1.0),SOLID), fc.textureId});
+            sprites.push_back(Sprite{vec3(x, y, originPos.z), vec2(fc.width, fc.height), vec4(color,SOLID), fc.textureId});
             
             originPos.x += (fc.advanceX >> 6);
         }

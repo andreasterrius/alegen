@@ -356,7 +356,7 @@ public:
             auto arenaBoundarySprites = arena.renderBoundary();
             spriteRenderer.render(arenaBoundarySprites, view, ortho);
 
-            auto textSprites = textRenderer.layoutText(vec3(300.0f, 300.0f, 0.0f), "abcdefghijk");
+            auto textSprites = textRenderer.layoutText(vec3(300.0f, 300.0f, 0.0f), "abcdefghijk", vec3(1.0, 1.0, 1.0));
             spriteRenderer.render(textSprites, view, ortho);
 
             glfwSwapBuffers(window);
