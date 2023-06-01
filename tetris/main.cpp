@@ -170,18 +170,29 @@ GLFWwindow *createWindow()
     return window;
 }
 
+struct ReplicatedInfo {
+    ivec2 topLeftPosition;
+    Block *b;
+};
+
 class BlockChangeReplicator : public SelectedBlockChangeListener
 {
 public:
-    BlockChangeReplicator()
+    ENetPeer *server;
+
+    BlockChangeReplicator(ENetPeer *server)
     {
+        this->server = server;
     }
 
-    void onChange(Block *b) override
+    void onChange(ivec2 topLeftPosition, Block *b) override
     {
+        ReplicatedInfo ri;
+        ri.topLeftPosition = topLeftPosition;
+        ri.b = b;
 
-        ENetPacket *packet = enet_packet_create(b, sizeof(Block), 0);
-        // enet_peer_send();
+        ENetPacket *packet = enet_packet_create(&ri, sizeof(ri), 0);
+        enet_peer_send (server, 0, packet);
 
         // cout << "on change" << endl;
         // should send message to server here
@@ -191,6 +202,12 @@ public:
     {
         //cout << "on place" << endl;
     }
+
+    ~BlockChangeReplicator()
+    {
+        // need to remove *server here ?
+    }
+
 };
 
 class Input
@@ -207,7 +224,7 @@ public:
     Timer moveLeftTimer;
     Timer moveRightTimer;
     Arena *arena;
-    bool shouldMoveFaster;
+    bool shouldMoveFaster = false; 
 
     float moveDownMin;
     float moveDownMax;
@@ -295,7 +312,7 @@ public:
     mat4 ortho;
     mat4 view;
 
-    Tetris() : arena(vec2(100, 0), 300), window(createWindow()), spriteRenderer(), 
+    Tetris(SelectedBlockChangeListener *sbcl) : arena(vec2(100, 0), 300), window(createWindow()), spriteRenderer(), 
         textRenderer("resources/font/Roboto/Roboto-Regular.ttf")
     {
         if (window == nullptr)
@@ -314,7 +331,7 @@ public:
         view = mat4(1.0);
         view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
 
-        arena.sbcl = new BlockChangeReplicator();
+        arena.sbcl = sbcl;
     }
 
     ~Tetris()
@@ -405,6 +422,7 @@ public:
         }
         cout << "Starting a server..." << endl;
 
+        unordered_set<uint16_t> connectedClients;
         ENetEvent event;
         while (true)
         {
@@ -412,24 +430,40 @@ public:
             switch (event.type)
             {
             case ENET_EVENT_TYPE_CONNECT:
-                printf("A new client connected from %x:%u.\n", event.peer->address.host, event.peer->address.port);
+                printf("Server: A new client connected from %x:%u.\n", event.peer->address.host, event.peer->address.port);
                 /* Store any relevant client information here. */
                 ClientData clientData;
                 event.peer->data = &clientData;
+
+                connectedClients.insert(event.peer->incomingPeerID);
                 break;
 
             case ENET_EVENT_TYPE_RECEIVE:
-                printf("A packet of length %lu containing %s was received from %s on channel %u.\n",
+                printf("Server: A packet of length %lu containing out:%u in:%u was received from %d on channel %u.\n",
                        event.packet->dataLength,
                        event.packet->data,
-                       event.peer->data,
+                       event.peer->outgoingPeerID,
+                       event.peer->incomingPeerID, // so this is actually the clientID, starts from 0,1..,etc
                        event.channelID);
+
+                ReplicatedInfo ri;
+                if(event.packet->dataLength == sizeof(ReplicatedInfo)) {
+                    memcpy(&ri, event.packet->data, event.packet->dataLength);
+                    printf("position:(%d,%d)\n", ri.topLeftPosition);
+                }
+
+                // tentuin dulu ini packet apa
+                // broadcast ke semua orang
+                // ReplicatedInfo* b = (ReplicatedInfo*) event.data;
+                // printf("Position: (%d)", b->topLeftPosition.x, b->topLeftPosition.y);
+                // printf("Data: %d", event.data);
+
                 /* Clean up the packet now that we're done using it. */
                 enet_packet_destroy(event.packet);
                 break;
 
             case ENET_EVENT_TYPE_DISCONNECT:
-                printf("%s disconnected.\n", event.peer->data);
+                printf("Server: %d disconnected.\n", event.peer->incomingPeerID);
                 /* Reset the peer's client information. */
                 event.peer->data = NULL;
                 break;
@@ -457,6 +491,7 @@ public:
     {
         thread checkConnThread;
         bool checkConnRunning = false;
+        BlockChangeReplicator *bcr = nullptr;
         if (hostIp != "" && hostPort != 0)
         {
             client = enet_host_create(NULL, 1, 2, 0, 0);
@@ -466,9 +501,11 @@ public:
             ENetPeer *serverPeer = enet_host_connect(client, &address, 2, 0);
             checkConnThread = thread(&Client::checkConnection, this);
             checkConnRunning = true;
+            
+            bcr = new BlockChangeReplicator(serverPeer);
         }
 
-        Tetris tetris;
+        Tetris tetris(bcr);
         tetris.run();
 
         shouldQuit = true;
@@ -476,6 +513,7 @@ public:
         if(checkConnRunning) {
             checkConnThread.join();
         }
+        delete bcr;
     }
 
     void checkConnection()

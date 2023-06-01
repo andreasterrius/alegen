@@ -201,10 +201,14 @@ public:
     }
 };
 
+struct Replicated {
+    
+};
+
 class SelectedBlockChangeListener
 {
 public:
-    virtual void onChange(Block *b) = 0;
+    virtual void onChange(ivec2 topLeftPosition, Block *b) = 0;
 
     virtual void onPlace(Block *b, unordered_set<int> *checkY) = 0;
 };
@@ -394,7 +398,9 @@ public:
                     return;
                 }
             }
-            sbcl->onPlace(selected.get(), &checkY);
+            if(sbcl != nullptr){
+                sbcl->onPlace(selected.get(), &checkY);
+            }
             scoreCheck(checkY);
             selected = nullptr;
             return;
@@ -425,7 +431,7 @@ public:
             blocks[s.y][s.x] = ArenaBlock{false, true, selected->color};
         }
         if(sbcl != nullptr)
-            sbcl->onChange(selected.get());
+            sbcl->onChange(selectedIndex, selected.get());
     }
 
     void dead()
